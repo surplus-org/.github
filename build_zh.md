@@ -38,6 +38,7 @@ REACT_APP_ENVIRONMENT=PRODUCTION yarn build
 
 
 3. 编译RTS
+
 cwd=app/client/packages/rts
 yarn cache=app/client/.yarn/cache, app/client/node_modules/.cache/webpack/
 corepack enable
@@ -49,11 +50,13 @@ app/client/packages/rts/dist/
 
 
 4. 编译server
+
 cwd=app/server
 Cache maven dependencies=~/.m2
 mvn -B clean compile && ./build.sh -DskipTests
 
-5. 构建镜像
+6. 构建镜像
+
 "deploy/docker/base.dockerfile"
 platforms: linux/arm64,linux/amd64
 
@@ -79,5 +82,6 @@ fi
 args+=(--build-arg "BASE=${{ vars.DOCKER_HUB_ORGANIZATION }}/base-${{ vars.EDITION }}:$base_tag")
 docker build -t cicontainer "${args[@]}" .
 
+7. 运行
 
 docker run --name appsmith-pg -p 5432:5432 -d -e POSTGRES_PASSWORD=password postgres:alpine postgres -N 1500
