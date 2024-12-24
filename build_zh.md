@@ -106,3 +106,23 @@ docker run --name appsmith-pg -p 5432:5432 -d -e POSTGRES_PASSWORD=password post
 ```
   --cpuset-cpus="1-3" --oom-kill-disable --oom-score-adj=-1000 --memory=4G --memory-swap=-1 
 ```
+
+### 问题2
+
+报错信息：
+```
+#
+# Fatal error in , line 0
+# Check failed: 0 == munmap(address, size).
+#
+#
+#
+#FailureMessage Object: 0x7d32107f8af0
+----- Native stack trace -----
+```
+解决方法：
+将app/client/build.sh中
+```
+craco --max-old-space-size=7168 build --config craco.build.config.js
+```
+的--max-old-space-size根据实际情况改小。
