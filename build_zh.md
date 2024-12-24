@@ -20,7 +20,7 @@
    进入编译容器
 ```bash
 docker run -it --rm --name build-front --hostname build-front \
-  --oom-kill-disable --memory=4G --memory-swap=-1 \
+  --cpuset-cpus="1-3" --oom-kill-disable --oom-score-adj=-1000 --memory=4G --memory-swap=-1 \
   -v /home/wales/appsmith/code/appsmith:/home/wales/appsmith \
   -v /home/wales/appsmith/code/yarn/:/home/wales/appsmith/app/client/.yarn/cache \
   -v /home/wales/appsmith/code/node_modules/:/home/wales/appsmith/app/client/node_modules/ \
@@ -89,3 +89,19 @@ docker build -t cicontainer "${args[@]}" .
 ## 6. 运行
 
 docker run --name appsmith-pg -p 5432:5432 -d -e POSTGRES_PASSWORD=password postgres:alpine postgres -N 1500
+
+
+## 其他
+
+### 问题1
+
+因为使用的是性能较低的桌面级进行编译运行动作，所以会遇到时不时被OOM的问题。
+```
+                    The build failed because the process exited too early.
+                    This probably means the system ran out of memory or someone called
+                    `kill -9` on the process.
+```
+解决方式：
+```
+  --cpuset-cpus="1-3" --oom-kill-disable --oom-score-adj=-1000 --memory=4G --memory-swap=-1 
+```
