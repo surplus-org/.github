@@ -88,8 +88,9 @@ docker build -t cicontainer "${args[@]}" .
 
 ## 6. 运行
 
+```bash
 docker run --name appsmith-pg -p 5432:5432 -d -e POSTGRES_PASSWORD=password postgres:alpine postgres -N 1500
-
+```
 
 ## 其他
 
