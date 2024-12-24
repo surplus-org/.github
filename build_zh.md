@@ -43,14 +43,28 @@ yarn build
 
 ## 3. 编译RTS
 
-cwd=app/client/packages/rts
-yarn cache=app/client/.yarn/cache, app/client/node_modules/.cache/webpack/
+   进入编译容器
+```bash
+docker run -it --rm --name build-front --hostname build-front \
+  --cpuset-cpus="1-3" --oom-kill-disable --oom-score-adj=-1000 --memory=4G --memory-swap=-1 \
+  -v /home/wales/appsmith/code/appsmith:/home/wales/appsmith \
+  -v /home/wales/appsmith/code/yarn/:/home/wales/appsmith/app/client/.yarn/cache \
+  -v /home/wales/appsmith/code/node_modules/:/home/wales/appsmith/app/client/node_modules/ \
+  -w /home/wales/appsmith \
+  node:20.11.1-bullseye \
+  bash
+```
+
+  执行命令
+```bash
+cd app/client/packages/rts
 corepack enable
 yarn install --immutable
 yarn run test:unit
 yarn build
+```
 
-app/client/packages/rts/dist/
+  编译出的产出物为：app/client/packages/rts/dist/
 
 
 ## 4. 编译server
@@ -126,3 +140,7 @@ docker run --name appsmith-pg -p 5432:5432 -d -e POSTGRES_PASSWORD=password post
 craco --max-old-space-size=7168 build --config craco.build.config.js
 ```
 的--max-old-space-size根据实际情况改小。
+
+### 问题3
+
+通过扩大swap区域解决oom问题。
