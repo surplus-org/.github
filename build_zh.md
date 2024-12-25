@@ -69,9 +69,21 @@ yarn build
 
 ## 4. 编译server
 
-cwd=app/server
-Cache maven dependencies=~/.m2
+   进入编译容器
+```bash
+docker run -it --rm --name buile-backend --hostname build-backend \
+  -v /home/wales/appsmith/code/appsmith:/home/wales/appsmith \
+  -v /home/wales/appsmith/code/maven:/root/.m2 \
+  -w /home/wales/appsmith \
+  maven:3.9.9-eclipse-temurin-17-focal \
+  bash
+```
+
+  执行命令
+```bash
+cd app/server
 mvn -B clean compile && ./build.sh -DskipTests
+```
 
 ## 5. 构建镜像
 
