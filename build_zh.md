@@ -10,7 +10,6 @@
 |postgresql|运行|postgres:14||
 |ngrok|调试|ngrok/ngrok:3.19.0-debian|gateway|
 |ubuntu|基座|ubuntu:20.04||
-|JDK|编译|openjdk:17.0.2-oraclelinux8||
 |Maven|编译|maven:3.9.9-eclipse-temurin-17-focal||
 |NodeJS|编译|node:20.18.1-alpine3.21,node:20.11.1-bullseye||
 
