@@ -111,7 +111,41 @@ fi
 args+=(--build-arg "BASE=${{ vars.DOCKER_HUB_ORGANIZATION }}/base-${{ vars.EDITION }}:$base_tag")
 docker build -t cicontainer "${args[@]}" .
 
-## 6. 运行
+## 6. 构建caddy镜像与运行
+
+```Dockerfile
+FROM caddy:builder-alpine AS caddybuilder
+
+# The env variables are needed for Appsmith server to correctly handle non-roman scripts like Arabic.
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+
+WORKDIR /opt/appsmith
+
+# Add client UI - Application Layer
+COPY ./app/client/build editor/
+```
+
+```bash
+docker container run -d --name appsmith-caddy --hostname appsmith-caddy \
+  -e "GO111MODULE=on" \
+  -e "GOPROXY=https://goproxy.cn" \
+  caddy:builder-alpine \
+  "$_APPSMITH_CADDY" start --config "$TMP/Caddyfile"
+```
+
+## 7. 构建rts镜像与运行
+
+```Dockerfile
+FROM node:20.18.1-alpine3.21
+
+# Add RTS - Application Layer
+COPY ./app/client/packages/rts/dist rts/
+```
+
+## 8. 构建appsmith镜像与运行
 ```bash
 docker container run -d --name appsmith-pg \
   -e POSTGRES_PASSWORD=password \
