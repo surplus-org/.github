@@ -8,7 +8,7 @@
 |redis|运行|redis:8.0-M02-bookworm||
 |mongodb|运行|mongodb/mongodb-community-server:5.0.3-ubuntu2004||
 |postgresql|运行|postgres:14||
-|ngrok|调试|node:20.18.1-alpine3.21|gateway|
+|ngrok|调试|ngrok/ngrok:3.19.0-debian|gateway|
 |ubuntu|基座|ubuntu:20.04||
 |JDK|编译|openjdk:17.0.2-oraclelinux8||
 |Maven|编译|maven:3.9.9-eclipse-temurin-17-focal||
@@ -113,9 +113,22 @@ args+=(--build-arg "BASE=${{ vars.DOCKER_HUB_ORGANIZATION }}/base-${{ vars.EDITI
 docker build -t cicontainer "${args[@]}" .
 
 ## 6. 运行
+```bash
+docker container run -d --name appsmith-pg \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  postgres:14 postgres -N 1500
+```
 
 ```bash
-docker run --name appsmith-pg -p 5432:5432 -d -e POSTGRES_PASSWORD=password postgres:alpine postgres -N 1500
+docker container run -d --name appsmith-redis \
+  -p 6379:6379 \
+  redis:8.0-M02-bookworm redis-server --save "" --appendonly no
+```
+
+```bash
+docker container run -d --name appsmith-mongodb \
+  -p 27017:27017 \
 ```
 
 ## 其他
