@@ -126,7 +126,7 @@ scripts/generate_infra_json.sh
 使用：backend
 
 
-## 6. 构建caddy镜像与运行
+## 6. 构建editor镜像与运行
 
 ```Dockerfile
 FROM caddy:2.8.4-builder
@@ -136,7 +136,7 @@ RUN xcaddy build --with github.com/mholt/caddy-ratelimit
 ```
 
 ```bash
-docker container run -d --restart=always --name appsmith-caddy --hostname appsmith-caddy \
+docker container run -d --restart=always --name appsmith-editor --hostname appsmith-editor \
   -e "GO111MODULE=on" \
   -e "GOPROXY=https://goproxy.cn" \
   -v $(pwd)/caddy/Caddyfile:/opt/appsmith/Caddyfile \
