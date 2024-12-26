@@ -83,33 +83,65 @@ docker run -it --rm --name buile-backend --hostname build-backend \
 cd app/server
 mvn -B clean compile && ./build.sh -DskipTests
 ```
+## 5. 构建base镜像并配置数据
 
-## 5. 构建镜像
+1. 构建base镜像
+```bash
+cd deploy/docker
+docker buildx build -t appsmith.base -f base.dockerfile .
+```
 
-"deploy/docker/base.dockerfile"
-platforms: linux/arm64,linux/amd64
+2. 进入base镜像，并生成info.json
+```bash
+export WWW_PATH=/tmp/appsmith/www
+export _APPSMITH_CADDY=/opt/caddy/caddy
+export TMP=/tmp/appsmith
+apt-get update
+apt-get install -y git jq
+cd scripts
+scripts/generate_info_json.sh
+```
+备份：deploy/docker/fs/opt/appsmith/info.json
+使用：backend,editor,rts
 
-Generate info.json
-run: |
-    if [[ -f scripts/generate_info_json.sh ]]; then
-    scripts/generate_info_json.sh
-    fi
 
-Place server artifacts-es
-        env:
-          EDITION: ${{ vars.EDITION }}
-        run: |
-          scripts/prepare_server_artifacts.sh
+3. 生成caddy配置文件
+```bash
+cd deploy/docker/fs/opt/appsmith
+scripts/generate_caddyfile.sh
+```
+备份：/tmp/appsmith/Caddyfile
 
-  base_tag=release
-else
-  base_tag=nightly
-base_tag=${{ steps.set_base_tag.outputs.base_tag }}
-if [[ base_tag != 'nightly' ]]; then
-args+=(--build-arg "APPSMITH_CLOUD_SERVICES_BASE_URL=https://release-cs.appsmith.com")
-fi
-args+=(--build-arg "BASE=${{ vars.DOCKER_HUB_ORGANIZATION }}/base-${{ vars.EDITION }}:$base_tag")
-docker build -t cicontainer "${args[@]}" .
+4. 生成infra.json
+```bash
+cd deploy/docker/fs/opt/appsmith
+scripts/generate_infra_json.sh
+```
+备份：/tmp/appsmith/infra.json
+使用：backend
+
+
+## 6. 构建caddy镜像与运行
+
+```Dockerfile
+FROM caddy:2.8.4-builder
+ENV "GO111MODULE=on" \
+ENV "GOPROXY=https://goproxy.cn" \
+RUN xcaddy build --with github.com/mholt/caddy-ratelimit
+```
+
+```bash
+docker container run -d --restart=always --name appsmith-caddy --hostname appsmith-caddy \
+  -e "GO111MODULE=on" \
+  -e "GOPROXY=https://goproxy.cn" \
+  -v $(pwd)/caddy/Caddyfile:/opt/appsmith/Caddyfile \
+  -v $(pwd)/code/appsmith/app/client/build:/opt/appsmith/editor/ \
+  -v $(pwd)/code/appsmith/deploy/docker/fs/opt/appsmith/info.json:/opt/appsmith/info.json \
+  -p 8080:80 -p 2019:2019 \
+  -w /opt/appsmith \
+  caddy:2.4.8-ok  \
+  caddy run --config /opt/appsmith/Caddyfile
+```
 
 ## 6. 构建caddy镜像与运行
 
