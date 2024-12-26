@@ -111,6 +111,11 @@ cd deploy/docker/fs/opt/appsmith
 scripts/generate_caddyfile.sh
 ```
 备份：/tmp/appsmith/Caddyfile
+使用：editor
+修改：
+> 文件中{$WWW_PATH}为${WWW_PATH};
+> 
+> 文件中127.0.0.1:${args[0]}为backend:8080
 
 4. 生成infra.json
 ```bash
