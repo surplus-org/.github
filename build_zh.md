@@ -9,12 +9,19 @@
 |mongodb|运行|mongodb/mongodb-community-server:5.0.3-ubuntu2004||
 |postgresql|运行|postgres:14||
 |ngrok|调试|ngrok/ngrok:3.19.0-debian|gateway|
+|java|基座|eclipse-temurin:17.0.13_11-jre-ubi9-minimal||
 |ubuntu|基座|ubuntu:20.04||
 |Maven|编译|maven:3.9.9-eclipse-temurin-17-focal||
 |NodeJS|编译|node:20.18.1-alpine3.21,node:20.11.1-bullseye||
 
+## 2. 构建base镜像并配置数据
 
-## 2. 编译client
+```bash
+cd deploy/docker
+docker buildx build -t appsmith.base -f base.dockerfile .
+```
+
+## 3. 编译client
    
    进入编译容器
 ```bash
@@ -40,7 +47,7 @@ REACT_APP_VERSION_EDITION="Community" \
 yarn build
 ```
 
-## 3. 编译RTS
+## 4. 编译RTS
 
    进入编译容器
 ```bash
@@ -66,32 +73,99 @@ yarn build
   编译出的产出物为：app/client/packages/rts/dist/
 
 
-## 4. 编译server
+## 5. 编译server
 
    进入编译容器
 ```bash
-docker run -it --rm --name buile-backend --hostname build-backend \
+docker run -it --rm --name buile-backend --hostname buile-backend \
+  --cpuset-cpus="1-3" --oom-kill-disable --oom-score-adj=-1000 --memory=4G --memory-swap=-1 \
   -v /home/wales/appsmith/code/appsmith:/home/wales/appsmith \
   -v /home/wales/appsmith/code/maven:/root/.m2 \
   -w /home/wales/appsmith \
-  maven:3.9.9-eclipse-temurin-17-focal \
+  appsmith.base \
   bash
 ```
 
   执行命令
 ```bash
 cd app/server
+APPSMITH_DB_URL="mongodb://localhost:27017/appsmith" 
+APPSMITH_REDIS_URL="redis://127.0.0.1:6379" 
+APPSMITH_MAIL_ENABLED=false 
+APPSMITH_ENCRYPTION_PASSWORD=abcd
+APPSMITH_ENCRYPTION_SALT=abcd
 mvn -B clean compile && ./build.sh -DskipTests
 ```
-## 5. 构建base镜像并配置数据
 
-1. 构建base镜像
+## 6. 初始化数据库
+
+1. postgres模式(根据app/server/appsmith-server/src/main/resources/application.properties中的配置，不支持postgres模式）
+
 ```bash
-cd deploy/docker
-docker buildx build -t appsmith.base -f base.dockerfile .
+docker container run -d --restart=always --name appsmith-pg --hostname appsmith-pg\
+  -e POSTGRES_DB=appsmith \
+  -e POSTGRES_PASSWORD=appsmith \
+  -e POSTGRES_USER=appsmith \
+  -v $(pwd)/pg/data:/var/lib/postgresql/data \
+  -p 5432:5432 \
+  postgres:14
 ```
 
-2. 进入base镜像，并生成info.json
+```SQL
+SELECT * FROM pg_database WHERE datname='appsmith';
+CREATE DATABASE appsmith;
+CREATE USER \"$PG_DB_USER\" WITH PASSWORD '$PG_DB_PASSWORD';
+CREATE SCHEMA IF NOT EXISTS appsmith;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+GRANT ALL PRIVILEGES ON SCHEMA ${schema} TO ${user};
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA ${schema} TO ${user};
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${schema} GRANT ALL PRIVILEGES ON TABLES TO ${user};
+GRANT CONNECT ON DATABASE ${db} TO ${user};
+```
+
+2. mongodb模式
+
+```bash
+docker run -d --restart always --name appsmith-mongo --hostname appsmith-mongo \
+  -e MONGODB_INITDB_ROOT_USERNAME=appsmith \
+  -e MONGODB_INITDB_ROOT_PASSWORD=appsmith \
+  -v $(pwd)/mongodb/mongod.conf:/etc/mongod.conf \
+  -v $(pwd)/mongodb/data:/var/lib/mongodb \
+  -v $(pwd)/mongodb/log:/var/log/mongodb/ \
+  mongodb/mongodb-community-server:5.0.3-ubuntu2004
+```
+
+
+docker run -it --restart always --name appsmith-mongo --hostname appsmith-mongo \
+  -e MONGODB_INITDB_ROOT_USERNAME=appsmith \
+  -e MONGODB_INITDB_ROOT_PASSWORD=appsmith \
+  -v $(pwd)/mongodb/mongod.conf:/etc/mongod.conf \
+  -v $(pwd)/mongodb/data:/var/lib/mongodb \
+  -v $(pwd)/mongodb/log:/var/log/mongodb/ \
+  mongodb/mongodb-community-server:5.0.3-ubuntu2004 /usr/bin/mongod --bind_ip 0.0.0.0 --port 27017 --logappend --tlsMode disabled  --fork
+
+/usr/bin/mongod --bind_ip 0.0.0.0 --port 27017 --logappend --tlsMode disabled  --fork
+
+```
+parseFloat(db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1}).featureCompatibilityVersion.version) < 5 &&
+      db.adminCommand({setFeatureCompatibilityVersion: "5.0"})
+```
+
+3. 缓存
+
+```bash
+docker container run -d --restart=always --name appsmith-redis --hostname appsmith-redis \
+  -e MASTER=0.0.0.0 \
+  -e REDIS_USER=appsmith \
+  -e REDIS_PASSWORD=appsmith \
+  -v $(pwd)/redis/data:/data \
+  -p 6379:6379 \
+  redis:6.2
+```
+
+## 7. 构建配置数据
+
+1. 进入base镜像，并生成info.json
 ```bash
 export WWW_PATH=/tmp/appsmith/www
 export _APPSMITH_CADDY=/opt/caddy/caddy
@@ -105,19 +179,14 @@ scripts/generate_info_json.sh
 使用：backend,editor,rts
 
 
-3. 生成caddy配置文件
+2. 生成caddy配置文件
 ```bash
 cd deploy/docker/fs/opt/appsmith
 scripts/generate_caddyfile.sh
 ```
 备份：/tmp/appsmith/Caddyfile
-使用：editor
-修改：
-> 文件中{$WWW_PATH}为${WWW_PATH};
-> 
-> 文件中127.0.0.1:${args[0]}为backend:8080
 
-4. 生成infra.json
+3. 生成infra.json
 ```bash
 cd deploy/docker/fs/opt/appsmith
 scripts/generate_infra_json.sh
@@ -126,7 +195,7 @@ scripts/generate_infra_json.sh
 使用：backend
 
 
-## 6. 构建editor镜像与运行
+## 8. 构建editor镜像与运行
 
 ```Dockerfile
 FROM caddy:2.8.4-builder
@@ -136,7 +205,7 @@ RUN xcaddy build --with github.com/mholt/caddy-ratelimit
 ```
 
 ```bash
-docker container run -d --restart=always --name appsmith-editor --hostname appsmith-editor \
+docker container run -d --restart=always --name appsmith-caddy --hostname appsmith-caddy \
   -e "GO111MODULE=on" \
   -e "GOPROXY=https://goproxy.cn" \
   -v $(pwd)/caddy/Caddyfile:/opt/appsmith/Caddyfile \
@@ -148,32 +217,8 @@ docker container run -d --restart=always --name appsmith-editor --hostname appsm
   caddy run --config /opt/appsmith/Caddyfile
 ```
 
-## 6. 构建caddy镜像与运行
 
-```Dockerfile
-FROM caddy:builder-alpine AS caddybuilder
-
-# The env variables are needed for Appsmith server to correctly handle non-roman scripts like Arabic.
-ENV LANG=C.UTF-8
-ENV LC_ALL=C.UTF-8
-
-RUN xcaddy build --with github.com/mholt/caddy-ratelimit
-
-WORKDIR /opt/appsmith
-
-# Add client UI - Application Layer
-COPY ./app/client/build editor/
-```
-
-```bash
-docker container run -d --name appsmith-caddy --hostname appsmith-caddy \
-  -e "GO111MODULE=on" \
-  -e "GOPROXY=https://goproxy.cn" \
-  caddy:builder-alpine \
-  "$_APPSMITH_CADDY" start --config "$TMP/Caddyfile"
-```
-
-## 7. 构建rts镜像与运行
+## 9. 构建rts镜像与运行
 
 ```Dockerfile
 FROM node:20.18.1-alpine3.21
@@ -182,24 +227,23 @@ FROM node:20.18.1-alpine3.21
 COPY ./app/client/packages/rts/dist rts/
 ```
 
-## 8. 构建appsmith镜像与运行
-```bash
-docker container run -d --name appsmith-pg \
-  -e POSTGRES_PASSWORD=password \
-  -p 5432:5432 \
-  postgres:14 postgres -N 1500
+/opt/appsmith/run-with-env.sh node server.js
+
+## 10. 构建backend镜像与运行
+
+```Dockerfile
+FROM eclipse-temurin:17.0.13_11-jre-ubi9-minimal
+
+# Add client UI - Application Layer
+COPY server.jar /opt/appsmith/server/mongo
 ```
 
 ```bash
-docker container run -d --name appsmith-redis \
-  -p 6379:6379 \
-  redis:8.0-M02-bookworm redis-server --save "" --appendonly no
+
+docker.env
 ```
 
-```bash
-docker container run -d --name appsmith-mongodb \
-  -p 27017:27017 \
-```
+
 
 ## 其他
 
